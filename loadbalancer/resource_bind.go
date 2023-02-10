@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	loadbalancerservice "github.com/ukfast/sdk-go/pkg/service/loadbalancer"
@@ -16,7 +17,18 @@ func resourceBind() *schema.Resource {
 		Update: resourceBindUpdate,
 		Delete: resourceBindDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			State: func(d *schema.ResourceData, i interface{}) ([]*schema.ResourceData, error) {
+				ids := strings.Split(d.Id(), "/")
+				listenerId, err := strconv.Atoi(ids[0])
+				if err != nil {
+					return nil, err
+				}
+
+				d.SetId(ids[1])
+				d.Set("listener_id", listenerId)
+
+				return []*schema.ResourceData{d}, nil
+			},
 		},
 
 		Schema: map[string]*schema.Schema{

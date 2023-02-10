@@ -23,3 +23,9 @@ resource "loadbalancer_bind" "bind-1" {
 - `listener_id`: ID of listener
 - `vip_id`: ID of VIP
 - `port`: Port number for bind
+
+## Import
+
+```
+terraform import loadbalancer_bind.example_bind {listener_id}/{bind_id}
+```
