@@ -1,4 +1,4 @@
-module github.com/ukfast/terraform-provider-loadbalancer
+module github.com/henrywhitaker3/terraform-provider-loadbalancer
 
 go 1.15
 
