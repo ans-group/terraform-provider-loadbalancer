@@ -47,6 +47,7 @@ func Provider() *schema.Provider {
 			"loadbalancer_listener":    resourceListener(),
 			"loadbalancer_target":      resourceTarget(),
 			"loadbalancer_targetgroup": resourceTargetGroup(),
+			"loadbalancer_vip":         resourceVip(),
 		},
 		ConfigureFunc: providerConfigure,
 	}

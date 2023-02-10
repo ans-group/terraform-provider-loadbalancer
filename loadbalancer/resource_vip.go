@@ -10,10 +10,10 @@ import (
 
 func resourceVip() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAccessIPCreate,
-		Read:   resourceAccessIPRead,
-		Update: resourceAccessIPUpdate,
-		Delete: resourceAccessIPDelete,
+		Create: resourceVipCreate,
+		Read:   resourceVipRead,
+		Update: resourceVipUpdate,
+		Delete: resourceVipDelete,
 		Importer: &schema.ResourceImporter{
 			State: schema.ImportStatePassthrough,
 		},
