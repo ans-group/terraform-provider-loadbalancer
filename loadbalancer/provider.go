@@ -37,6 +37,7 @@ func Provider() *schema.Provider {
 			"loadbalancer_listener":    dataSourceListener(),
 			"loadbalancer_target":      dataSourceTarget(),
 			"loadbalancer_targetgroup": dataSourceTargetGroup(),
+			"loadbalancer_vip":         dataSourceVip(),
 		},
 		ResourcesMap: map[string]*schema.Resource{
 			"loadbalancer_accessip":    resourceAccessIP(),
@@ -47,7 +48,6 @@ func Provider() *schema.Provider {
 			"loadbalancer_listener":    resourceListener(),
 			"loadbalancer_target":      resourceTarget(),
 			"loadbalancer_targetgroup": resourceTargetGroup(),
-			"loadbalancer_vip":         resourceVip(),
 		},
 		ConfigureFunc: providerConfigure,
 	}
