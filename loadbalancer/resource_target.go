@@ -6,10 +6,10 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/ans-group/sdk-go/pkg/connection"
+	"github.com/ans-group/sdk-go/pkg/ptr"
+	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/ukfast/sdk-go/pkg/connection"
-	"github.com/ukfast/sdk-go/pkg/ptr"
-	loadbalancerservice "github.com/ukfast/sdk-go/pkg/service/loadbalancer"
 )
 
 func resourceTarget() *schema.Resource {

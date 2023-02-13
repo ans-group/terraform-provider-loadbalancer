@@ -4,10 +4,10 @@ import (
 	"errors"
 	"os"
 
+	"github.com/ans-group/sdk-go/pkg/client"
+	"github.com/ans-group/sdk-go/pkg/connection"
+	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/ukfast/sdk-go/pkg/client"
-	"github.com/ukfast/sdk-go/pkg/connection"
-	loadbalancerservice "github.com/ukfast/sdk-go/pkg/service/loadbalancer"
 )
 
 func Provider() *schema.Provider {
@@ -25,7 +25,7 @@ func Provider() *schema.Provider {
 
 					return "", errors.New("api_key required")
 				},
-				Description: "API token required to authenticate with UKFast APIs. See https://developers.ukfast.io for more details",
+				Description: "API token required to authenticate with ANS APIs. See https://developers.ukfast.io for more details",
 			},
 		},
 		DataSourcesMap: map[string]*schema.Resource{

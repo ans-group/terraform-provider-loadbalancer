@@ -1,8 +1,8 @@
 package loadbalancer
 
 import (
+	"github.com/ans-group/sdk-go/pkg/service/loadbalancer"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
-	"github.com/ukfast/sdk-go/pkg/service/loadbalancer"
 )
 
 func expandACLConditions(rawConditions []interface{}) []loadbalancer.ACLCondition {
