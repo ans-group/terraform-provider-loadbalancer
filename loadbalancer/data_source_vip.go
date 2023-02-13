@@ -50,7 +50,7 @@ func dataSourceVipRead(d *schema.ResourceData, meta interface{}) error {
 
 	vips, err := service.GetVIPs(params)
 	if err != nil {
-		return fmt.Errorf("Error retrieving targets: %s", err)
+		return fmt.Errorf("Error retrieving vips: %s", err)
 	}
 
 	if len(vips) < 1 {
