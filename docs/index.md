@@ -1,6 +1,6 @@
 # Load balancer Provider
 
-Official UKFast Loadbalancer Terraform provider
+Official ANS Loadbalancer Terraform provider
 
 ## Example Usage
 
@@ -17,4 +17,4 @@ resource "loadbalancer_targetgroup" "targetgroup-1" {
 
 ## Argument Reference
 
-* `api_key`: UKFast API key - read/write permissions for `loadbalancer` service required. If omitted, will use `UKF_API_KEY` environment variable value
+* `api_key`: ANS API key - read/write permissions for `loadbalancer` service required. If omitted, will use `UKF_API_KEY` environment variable value
