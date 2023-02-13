@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"log"
 	"strconv"
+	"strings"
 
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/ukfast/sdk-go/pkg/connection"
@@ -18,7 +19,18 @@ func resourceTarget() *schema.Resource {
 		Update: resourceTargetUpdate,
 		Delete: resourceTargetDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			State: func(d *schema.ResourceData, i interface{}) ([]*schema.ResourceData, error) {
+				ids := strings.Split(d.Id(), "/")
+				targetGroupId, err := strconv.Atoi(ids[0])
+				if err != nil {
+					return nil, err
+				}
+
+				d.Set("target_group_id", targetGroupId)
+				d.SetId(ids[1])
+
+				return []*schema.ResourceData{d}, nil
+			},
 		},
 
 		Schema: map[string]*schema.Schema{

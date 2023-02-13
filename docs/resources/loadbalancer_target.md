@@ -45,3 +45,9 @@ resource "loadbalancer_target" "target-1" {
 - `disable_http2`: Specifies HTTP2 is disabled for target
 - `http2_only`: HTTP2 only is enabled for target
 - `active`: Active status of target
+
+## Import
+
+```
+terraform import loadbalancer_target.example_target {target_group_id}/{target_id}
+```
