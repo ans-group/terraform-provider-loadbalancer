@@ -20,3 +20,7 @@ provider "loadbalancer" {
   api_key = "abc"
 }
 ```
+
+## Upgrading
+
+:warning: This provider was originally created under the `ukfast` organisation, and was later moved to the `ans-group` organisation. Upgrading the `ukfast` provider will result in the error `checksum list has unexpected`. Updating provider config to use the `ans-group` organisation will resolve this
