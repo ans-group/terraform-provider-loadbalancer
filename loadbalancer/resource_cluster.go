@@ -20,11 +20,6 @@ func resourceCluster() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
-			"cluster_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
-			},
 			"name": {
 				Type:     schema.TypeString,
 				Required: true,
