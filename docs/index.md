@@ -65,5 +65,5 @@ loadbalancer_cluster_ids = [
 Terraform run complete, deploying the configuration to the loadbalancer...
 Deploying cluster(s): 12345
 
-Deploying 60604... ok
+Deploying 12345... ok
 ```
