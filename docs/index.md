@@ -14,7 +14,7 @@ data "loadbalancer_cluster" "mycluster" {
 }
 
 resource "loadbalancer_targetgroup" "targetgroup-1" {
-  cluster_id = data.loadbalancer_cluster.mycluster.cluster_id
+  cluster_id = data.loadbalancer_cluster.mycluster.id
   name = "testgroup"
 }
 ```
@@ -43,7 +43,7 @@ data "loadbalancer_cluster" "mycluster" {
 }
 
 output "loadbalancer_cluster_ids" {
-  value = [data.loadbalancer_cluster.mycluster.cluster_id]
+  value = [data.loadbalancer_cluster.mycluster.id]
 }
 ```
 

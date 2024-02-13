@@ -18,6 +18,6 @@ data "loadbalancer_cluster" "cluster-1" {
 
 ## Attributes Reference
 
-- `cluster_id`: Cluster ID
+- `id`: Cluster ID
 - `name`: Name of loadbalancer cluster
 - `deployed`: Deployment status loadbalancer cluster
