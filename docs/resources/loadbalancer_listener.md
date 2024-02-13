@@ -6,8 +6,10 @@ This resource is for managing loadbalancer listeners
 
 ```hcl
 resource "loadbalancer_listener" "listener-1" {
-  listener_id = 1
-  ip = "1.2.3.4"
+  cluster_id = 1
+  name = "listener1"
+  mode = "tcp"
+  default_target_group_id = 2
 }
 ```
 

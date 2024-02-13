@@ -7,7 +7,8 @@ This resource is for managing loadbalancer binds
 ```hcl
 resource "loadbalancer_bind" "bind-1" {
   listener_id = 1
-  ip = "1.2.3.4"
+  vip_ip = 1234
+  port = 80
 }
 ```
 
