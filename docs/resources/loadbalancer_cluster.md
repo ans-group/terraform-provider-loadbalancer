@@ -2,7 +2,7 @@
 
 This resource is for managing loadbalancer clusters
 
-Note - it is not currently possible to create clusters via this resource. An existing `cluster_id` must be provided
+Note - it is not currently possible to create clusters via this resource. An existing `cluster_id` must be provided. We recommend that you use the `loadbalancer_cluster` datasource instead.
 
 ## Example Usage
 

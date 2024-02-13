@@ -6,7 +6,7 @@ This resource represents a loadbalancer cluster
 
 ```hcl
 data "loadbalancer_cluster" "cluster-1" {
-  name = "my-cluster"
+  cluster_id = 12345
 }
 ```
 
@@ -18,6 +18,6 @@ data "loadbalancer_cluster" "cluster-1" {
 
 ## Attributes Reference
 
-- `id`: Cluster ID
+- `cluster_id`: Cluster ID
 - `name`: Name of loadbalancer cluster
 - `deployed`: Deployment status loadbalancer cluster

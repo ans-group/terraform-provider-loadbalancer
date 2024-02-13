@@ -1,6 +1,6 @@
-# Load balancer Provider
+# Load Balancer Provider
 
-Official ANS Loadbalancer Terraform provider
+Official ANS Load Balancer Terraform provider.
 
 ## Example Usage
 
@@ -9,8 +9,12 @@ provider "loadbalancer" {
   api_key = "abc"
 }
 
+data "loadbalancer_cluster" "mycluster" {
+  cluster_id = 12345
+}
+
 resource "loadbalancer_targetgroup" "targetgroup-1" {
-  cluster_id = 123
+  cluster_id = data.loadbalancer_cluster.mycluster.cluster_id
   name = "testgroup"
 }
 ```
