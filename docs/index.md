@@ -36,7 +36,6 @@ The ANS CLI has a wrapper around Terraform/OpenTofu that allows you to apply the
 ```hcl
 data "loadbalancer_cluster" "mycluster" {
   cluster_id = 12345
-  name       = "ACME Corp LB 1"
 }
 
 output "loadbalancer_cluster_ids" {
