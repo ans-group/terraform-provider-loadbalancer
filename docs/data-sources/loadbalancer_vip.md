@@ -6,7 +6,7 @@ This resource represents a loadbalancer vip
 
 ```hcl
 data "loadbalancer_vip" "vip-1" {
-  id = 1
+  vip_id = 1
 }
 ```
 
