@@ -34,13 +34,13 @@ You can also manually deploy using the ANS CLI tool with `ans loadbalancer clust
 The ANS CLI has a wrapper around Terraform/OpenTofu that allows you to apply the Terraform and deploy in a single step. To use this, you must provide an output of the cluster IDs your Terraform is targeting, like so:
 
 ```hcl
-resource "loadbalancer_cluster" "mycluster" {
+data "loadbalancer_cluster" "mycluster" {
   cluster_id = 12345
   name       = "ACME Corp LB 1"
 }
 
 output "loadbalancer_cluster_ids" {
-  value = [loadbalancer_cluster.mycluster.cluster_id]
+  value = [data.loadbalancer_cluster.mycluster.cluster_id]
 }
 ```
 
