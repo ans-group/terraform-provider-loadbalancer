@@ -3,3 +3,4 @@ terraform-provider-loadbalancer*
 .vscode/
 dist/
 *.code-workspace
+.idea/

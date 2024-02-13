@@ -20,11 +20,6 @@ func resourceCluster() *schema.Resource {
 		},
 
 		Schema: map[string]*schema.Schema{
-			"cluster_id": {
-				Type:     schema.TypeInt,
-				Required: true,
-				ForceNew: true,
-			},
 			"name": {
 				Type:     schema.TypeString,
 				Required: true,
@@ -34,9 +29,7 @@ func resourceCluster() *schema.Resource {
 }
 
 func resourceClusterCreate(d *schema.ResourceData, meta interface{}) error {
-	d.SetId(strconv.Itoa(d.Get("cluster_id").(int)))
-
-	return resourceClusterRead(d, meta)
+	return fmt.Errorf("The loadbalancer_cluster resource can only be imported at this time")
 }
 
 func resourceClusterRead(d *schema.ResourceData, meta interface{}) error {
