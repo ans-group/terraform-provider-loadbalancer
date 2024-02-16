@@ -1,18 +1,18 @@
 package loadbalancer
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/connection"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceTargetGroup() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceTargetGroupRead,
+		ReadContext: dataSourceTargetGroupRead,
 
 		Schema: map[string]*schema.Schema{
 			"target_group_id": {
@@ -115,7 +115,7 @@ func dataSourceTargetGroup() *schema.Resource {
 	}
 }
 
-func dataSourceTargetGroupRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceTargetGroupRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	params := connection.APIRequestParameters{}
@@ -132,41 +132,41 @@ func dataSourceTargetGroupRead(d *schema.ResourceData, meta interface{}) error {
 
 	targetgroups, err := service.GetTargetGroups(params)
 	if err != nil {
-		return fmt.Errorf("Error retrieving target groups: %s", err)
+		return diag.Errorf("Error retrieving target groups: %s", err)
 	}
 
 	if len(targetgroups) < 1 {
-		return errors.New("No target groups found with provided arguments")
+		return diag.Errorf("No target groups found with provided arguments")
 	}
 
 	if len(targetgroups) > 1 {
-		return errors.New("More than 1 target group found with provided arguments")
+		return diag.Errorf("More than 1 target group found with provided arguments")
 	}
 
 	d.SetId(strconv.Itoa(targetgroups[0].ID))
-	d.Set("name", targetgroups[0].Name)
-	d.Set("cluster_id", targetgroups[0].ClusterID)
-	d.Set("balance", targetgroups[0].Balance)
-	d.Set("mode", targetgroups[0].Mode)
-	d.Set("close", targetgroups[0].Close)
-	d.Set("sticky", targetgroups[0].Sticky)
-	d.Set("cookie_opts", targetgroups[0].CookieOpts)
-	d.Set("source", targetgroups[0].Source)
-	d.Set("timeouts_connect", targetgroups[0].TimeoutsConnect)
-	d.Set("timeouts_server", targetgroups[0].TimeoutsServer)
-	d.Set("custom_options", targetgroups[0].CustomOptions)
-	d.Set("monitor_url", targetgroups[0].MonitorURL)
-	d.Set("monitor_method", targetgroups[0].MonitorMethod)
-	d.Set("monitor_host", targetgroups[0].MonitorHost)
-	d.Set("monitor_http_version", targetgroups[0].MonitorHTTPVersion)
-	d.Set("monitor_expect", targetgroups[0].MonitorExpect)
-	d.Set("monitor_tcp_monitoring", targetgroups[0].MonitorTCPMonitoring)
-	d.Set("check_port", targetgroups[0].CheckPort)
-	d.Set("send_proxy", targetgroups[0].SendProxy)
-	d.Set("send_proxy_v2", targetgroups[0].SendProxyV2)
-	d.Set("ssl", targetgroups[0].SSL)
-	d.Set("ssl_verify", targetgroups[0].SSLVerify)
-	d.Set("sni", targetgroups[0].SNI)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"name":                   targetgroups[0].Name,
+		"cluster_id":             targetgroups[0].ClusterID,
+		"balance":                targetgroups[0].Balance,
+		"mode":                   targetgroups[0].Mode,
+		"close":                  targetgroups[0].Close,
+		"sticky":                 targetgroups[0].Sticky,
+		"cookie_opts":            targetgroups[0].CookieOpts,
+		"source":                 targetgroups[0].Source,
+		"timeouts_connect":       targetgroups[0].TimeoutsConnect,
+		"timeouts_server":        targetgroups[0].TimeoutsServer,
+		"custom_options":         targetgroups[0].CustomOptions,
+		"monitor_url":            targetgroups[0].MonitorURL,
+		"monitor_method":         targetgroups[0].MonitorMethod,
+		"monitor_host":           targetgroups[0].MonitorHost,
+		"monitor_http_version":   targetgroups[0].MonitorHTTPVersion,
+		"monitor_expect":         targetgroups[0].MonitorExpect,
+		"monitor_tcp_monitoring": targetgroups[0].MonitorTCPMonitoring,
+		"check_port":             targetgroups[0].CheckPort,
+		"send_proxy":             targetgroups[0].SendProxy,
+		"send_proxy_v2":          targetgroups[0].SendProxyV2,
+		"ssl":                    targetgroups[0].SSL,
+		"ssl_verify":             targetgroups[0].SSLVerify,
+		"sni":                    targetgroups[0].SNI,
+	})
 }

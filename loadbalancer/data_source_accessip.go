@@ -1,19 +1,19 @@
 package loadbalancer
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"strconv"
 
-	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 	"github.com/ans-group/sdk-go/pkg/connection"
 	"github.com/ans-group/sdk-go/pkg/service/loadbalancer"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceAccessIP() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceAccessIPRead,
+		ReadContext: dataSourceAccessIPRead,
 
 		Schema: map[string]*schema.Schema{
 			"listener_id": {
@@ -32,7 +32,7 @@ func dataSourceAccessIP() *schema.Resource {
 	}
 }
 
-func dataSourceAccessIPRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceAccessIPRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	params := connection.APIRequestParameters{}
@@ -41,7 +41,7 @@ func dataSourceAccessIPRead(d *schema.ResourceData, meta interface{}) error {
 	accessIPID, accessOk := d.GetOk("access_ip_id")
 
 	if !listenerOk && !accessOk {
-		return errors.New("listener_id must be provided when access_ip_id is omitted")
+		return diag.Errorf("listener_id must be provided when access_ip_id is omitted")
 	}
 
 	var accessIP loadbalancer.AccessIP
@@ -56,27 +56,27 @@ func dataSourceAccessIPRead(d *schema.ResourceData, meta interface{}) error {
 
 		accessIPs, err := service.GetListenerAccessIPs(listenerID.(int), params)
 		if err != nil {
-			return fmt.Errorf("Error retrieving access IPs: %s", err)
+			return diag.Errorf("Error retrieving access IPs: %s", err)
 		}
 
 		if len(accessIPs) < 1 {
-			return errors.New("No access IPs found with provided arguments")
+			return diag.Errorf("No access IPs found with provided arguments")
 		}
 
 		if len(accessIPs) > 1 {
-			return errors.New("More than 1 access IP found with provided arguments")
+			return diag.Errorf("More than 1 access IP found with provided arguments")
 		}
 
 		accessIP = accessIPs[0]
 	} else {
 		accessIP, err = service.GetAccessIP(accessIPID.(int))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
 	d.SetId(strconv.Itoa(accessIP.ID))
-	d.Set("ip", accessIP.IP)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"ip": accessIP.IP,
+	})
 }

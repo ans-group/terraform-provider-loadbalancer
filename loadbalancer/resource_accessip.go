@@ -1,23 +1,25 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"errors"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/connection"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceAccessIP() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceAccessIPCreate,
-		Read:   resourceAccessIPRead,
-		Update: resourceAccessIPUpdate,
-		Delete: resourceAccessIPDelete,
+		CreateContext: resourceAccessIPCreate,
+		ReadContext:   resourceAccessIPRead,
+		UpdateContext: resourceAccessIPUpdate,
+		DeleteContext: resourceAccessIPDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -34,50 +36,59 @@ func resourceAccessIP() *schema.Resource {
 	}
 }
 
-func resourceAccessIPCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceAccessIPCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
+
+	listenerID := d.Get("listener_id").(int)
+
+	tflog.Info(ctx, "creating access IP", map[string]any{
+		"ip":          d.Get("ip"),
+		"listener_id": d.Get("listener_id"),
+	})
 
 	createReq := loadbalancerservice.CreateAccessIPRequest{
 		IP: connection.IPAddress(d.Get("ip").(string)),
 	}
-	log.Printf("[DEBUG] Created CreateAccessIPRequest: %+v", createReq)
+	tflog.Debug(ctx, "created CreatedAccessIPRequest", map[string]any{
+		"request": createReq,
+	})
 
-	listenerID := d.Get("listener_id").(int)
-
-	log.Print("[INFO] Creating access IP")
 	accessIP, err := service.CreateListenerAccessIP(listenerID, createReq)
 	if err != nil {
-		return fmt.Errorf("Error creating access IP: %s", err)
+		return diag.Errorf("Error creating access IP: %s", err)
 	}
 
 	d.SetId(strconv.Itoa(accessIP))
 
-	return resourceAccessIPRead(d, meta)
+	return resourceAccessIPRead(ctx, d, meta)
 }
 
-func resourceAccessIPRead(d *schema.ResourceData, meta interface{}) error {
+func resourceAccessIPRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	accessIPID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[DEBUG] Retrieving AccessIP with ID [%d]", accessIPID)
+	tflog.Debug(ctx, "retrieving AccessIP", map[string]any{
+		"access_ip_id": accessIPID,
+	})
 	accessIP, err := service.GetAccessIP(accessIPID)
 	if err != nil {
-		switch err.(type) {
-		case *loadbalancerservice.AccessIPNotFoundError:
+		var accessIPNotFoundError *loadbalancerservice.AccessIPNotFoundError
+		switch {
+		case errors.As(err, &accessIPNotFoundError):
 			d.SetId("")
 			return nil
 		default:
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
-	d.Set("ip", accessIP.IP)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"ip": accessIP.IP,
+	})
 }
 
-func resourceAccessIPUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceAccessIPUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 	patchReq := loadbalancerservice.PatchAccessIPRequest{}
 
@@ -87,24 +98,29 @@ func resourceAccessIPUpdate(d *schema.ResourceData, meta interface{}) error {
 		patchReq.IP = connection.IPAddress(d.Get("ip").(string))
 	}
 
-	log.Printf("[INFO] Updating access IP with ID [%d]", accessIPID)
+	tflog.Info(ctx, "updating access IP", map[string]any{
+		"access_ip_id": accessIPID,
+	})
 	err := service.PatchAccessIP(accessIPID, patchReq)
 	if err != nil {
-		return fmt.Errorf("Error updating access IP with ID [%d]: %w", accessIPID, err)
+		return diag.Errorf("Error updating access IP with ID [%d]: %s", accessIPID, err)
 	}
 
-	return resourceAccessIPRead(d, meta)
+	return resourceAccessIPRead(ctx, d, meta)
 }
 
-func resourceAccessIPDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceAccessIPDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	accessIPID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[INFO] Removing access IP with ID [%d]", accessIPID)
+	tflog.Info(ctx, "removing access IP", map[string]any{
+		"access_ip_id": accessIPID,
+	})
+
 	err := service.DeleteAccessIP(accessIPID)
 	if err != nil {
-		return fmt.Errorf("Error removing access IP with ID [%d]: %s", accessIPID, err)
+		return diag.Errorf("Error removing access IP with ID [%d]: %s", accessIPID, err)
 	}
 
 	return nil

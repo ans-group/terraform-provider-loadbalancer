@@ -1,18 +1,18 @@
 package loadbalancer
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/connection"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceVip() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceVipRead,
+		ReadContext: dataSourceVipRead,
 
 		Schema: map[string]*schema.Schema{
 			"vip_id": {
@@ -39,7 +39,7 @@ func dataSourceVip() *schema.Resource {
 	}
 }
 
-func dataSourceVipRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceVipRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	params := connection.APIRequestParameters{}
@@ -50,22 +50,22 @@ func dataSourceVipRead(d *schema.ResourceData, meta interface{}) error {
 
 	vips, err := service.GetVIPs(params)
 	if err != nil {
-		return fmt.Errorf("Error retrieving vips: %s", err)
+		return diag.Errorf("Error retrieving vips: %s", err)
 	}
 
 	if len(vips) < 1 {
-		return errors.New("No vips found with provided arguments")
+		return diag.Errorf("No vips found with provided arguments")
 	}
 
 	if len(vips) > 1 {
-		return errors.New("More than 1 vip found with provided arguments")
+		return diag.Errorf("More than 1 vip found with provided arguments")
 	}
 
 	d.SetId(strconv.Itoa(vips[0].ID))
-	d.Set("cluster_id", vips[0].ClusterID)
-	d.Set("internal_cidr", vips[0].InternalCIDR)
-	d.Set("external_cidr", vips[0].ExternalCIDR)
-	d.Set("mac_address", vips[0].MACAddress)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"cluster_id":    vips[0].ClusterID,
+		"internal_cidr": vips[0].InternalCIDR,
+		"external_cidr": vips[0].ExternalCIDR,
+		"mac_address":   vips[0].MACAddress,
+	})
 }

@@ -1,18 +1,18 @@
 package loadbalancer
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/connection"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceTarget() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceTargetRead,
+		ReadContext: dataSourceTargetRead,
 
 		Schema: map[string]*schema.Schema{
 			"target_group_id": {
@@ -75,7 +75,7 @@ func dataSourceTarget() *schema.Resource {
 	}
 }
 
-func dataSourceTargetRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceTargetRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	params := connection.APIRequestParameters{}
@@ -97,31 +97,31 @@ func dataSourceTargetRead(d *schema.ResourceData, meta interface{}) error {
 
 	targets, err := service.GetTargetGroupTargets(targetgroupID, params)
 	if err != nil {
-		return fmt.Errorf("Error retrieving targets: %s", err)
+		return diag.Errorf("Error retrieving targets: %s", err)
 	}
 
 	if len(targets) < 1 {
-		return errors.New("No targets found with provided arguments")
+		return diag.Errorf("No targets found with provided arguments")
 	}
 
 	if len(targets) > 1 {
-		return errors.New("More than 1 target found with provided arguments")
+		return diag.Errorf("More than 1 target found with provided arguments")
 	}
 
 	d.SetId(strconv.Itoa(targets[0].ID))
-	d.Set("target_group_id", targets[0].TargetGroupID)
-	d.Set("name", targets[0].Name)
-	d.Set("ip", targets[0].IP)
-	d.Set("port", targets[0].Port)
-	d.Set("weight", targets[0].Weight)
-	d.Set("backup", targets[0].Backup)
-	d.Set("check_interval", targets[0].CheckInterval)
-	d.Set("check_ssl", targets[0].CheckSSL)
-	d.Set("check_rise", targets[0].CheckRise)
-	d.Set("check_fall", targets[0].CheckFall)
-	d.Set("disable_http2", targets[0].DisableHTTP2)
-	d.Set("http2_only", targets[0].HTTP2Only)
-	d.Set("active", targets[0].Active)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"target_group_id": targets[0].TargetGroupID,
+		"name":            targets[0].Name,
+		"ip":              targets[0].IP,
+		"port":            targets[0].Port,
+		"weight":          targets[0].Weight,
+		"backup":          targets[0].Backup,
+		"check_interval":  targets[0].CheckInterval,
+		"check_ssl":       targets[0].CheckSSL,
+		"check_rise":      targets[0].CheckRise,
+		"check_fall":      targets[0].CheckFall,
+		"disable_http2":   targets[0].DisableHTTP2,
+		"http2_only":      targets[0].HTTP2Only,
+		"active":          targets[0].Active,
+	})
 }

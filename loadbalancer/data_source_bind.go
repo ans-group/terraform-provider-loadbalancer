@@ -1,18 +1,18 @@
 package loadbalancer
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/connection"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceBind() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceBindRead,
+		ReadContext: dataSourceBindRead,
 
 		Schema: map[string]*schema.Schema{
 			"listener_id": {
@@ -35,7 +35,7 @@ func dataSourceBind() *schema.Resource {
 	}
 }
 
-func dataSourceBindRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceBindRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	params := connection.APIRequestParameters{}
@@ -54,23 +54,23 @@ func dataSourceBindRead(d *schema.ResourceData, meta interface{}) error {
 
 	binds, err := service.GetListenerBinds(listenerID.(int), params)
 	if err != nil {
-		return fmt.Errorf("Error retrieving binds: %s", err)
+		return diag.Errorf("Error retrieving binds: %s", err)
 	}
 
 	if len(binds) < 1 {
-		return errors.New("No binds found with provided arguments")
+		return diag.Errorf("No binds found with provided arguments")
 	}
 
 	if len(binds) > 1 {
-		return errors.New("More than 1 bind found with provided arguments")
+		return diag.Errorf("More than 1 bind found with provided arguments")
 	}
 
 	bind := binds[0]
 
 	d.SetId(strconv.Itoa(bind.ID))
-	d.Set("listener_id", bind.ListenerID)
-	d.Set("vip_id", bind.VIPID)
-	d.Set("port", bind.Port)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"listener_id": bind.ListenerID,
+		"vip_id":      bind.VIPID,
+		"port":        bind.Port,
+	})
 }

@@ -7,6 +7,7 @@ import (
 	"github.com/ans-group/sdk-go/pkg/client"
 	"github.com/ans-group/sdk-go/pkg/connection"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
@@ -63,4 +64,13 @@ func getClient(apiKey string) client.Client {
 
 func getService(apiKey string) loadbalancerservice.LoadBalancerService {
 	return getClient(apiKey).LoadBalancerService()
+}
+
+func setKeys(d *schema.ResourceData, kv map[string]any) diag.Diagnostics {
+	for k, v := range kv {
+		if err := d.Set(k, v); err != nil {
+			return diag.FromErr(err)
+		}
+	}
+	return nil
 }
