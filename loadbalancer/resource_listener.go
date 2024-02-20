@@ -1,23 +1,25 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"errors"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/ptr"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceListener() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceListenerCreate,
-		Read:   resourceListenerRead,
-		Update: resourceListenerUpdate,
-		Delete: resourceListenerDelete,
+		CreateContext: resourceListenerCreate,
+		ReadContext:   resourceListenerRead,
+		UpdateContext: resourceListenerUpdate,
+		DeleteContext: resourceListenerDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -97,13 +99,18 @@ func resourceListener() *schema.Resource {
 	}
 }
 
-func resourceListenerCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceListenerCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	mode, err := loadbalancerservice.ParseMode(d.Get("mode").(string))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
+
+	tflog.Info(ctx, "creating listener", map[string]any{
+		"name":       d.Get("name"),
+		"cluster_id": d.Get("cluster_id"),
+	})
 
 	createReq := loadbalancerservice.CreateListenerRequest{
 		Name:                 d.Get("name").(string),
@@ -121,56 +128,61 @@ func resourceListenerCreate(d *schema.ResourceData, meta interface{}) error {
 		HTTP2Only:            d.Get("http2_only").(bool),
 		CustomCiphers:        d.Get("custom_ciphers").(string),
 	}
-	log.Printf("[DEBUG] Created CreateListenerRequest: %+v", createReq)
+	tflog.Debug(ctx, "created CreateListenerRequest", map[string]any{
+		"request": createReq,
+	})
 
-	log.Print("[INFO] Creating listener")
 	listener, err := service.CreateListener(createReq)
 	if err != nil {
-		return fmt.Errorf("Error creating listener: %s", err)
+		return diag.Errorf("Error creating listener: %s", err)
 	}
 
 	d.SetId(strconv.Itoa(listener))
 
-	return resourceListenerRead(d, meta)
+	return resourceListenerRead(ctx, d, meta)
 }
 
-func resourceListenerRead(d *schema.ResourceData, meta interface{}) error {
+func resourceListenerRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	listenerID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[DEBUG] Retrieving Listener with ID [%d]", listenerID)
+	tflog.Debug(ctx, "retrieving listener", map[string]any{
+		"listener_id": listenerID,
+	})
+
 	listener, err := service.GetListener(listenerID)
 	if err != nil {
-		switch err.(type) {
-		case *loadbalancerservice.ListenerNotFoundError:
+		var listenerNotFoundError *loadbalancerservice.ListenerNotFoundError
+		switch {
+		case errors.As(err, &listenerNotFoundError):
 			d.SetId("")
 			return nil
 		default:
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
-	d.Set("name", listener.Name)
-	d.Set("cluster_id", listener.ClusterID)
-	d.Set("mode", listener.Mode)
-	d.Set("default_target_group_id", listener.DefaultTargetGroupID)
-	d.Set("hsts_enabled", listener.HSTSEnabled)
-	d.Set("hsts_maxage", listener.HSTSMaxAge)
-	d.Set("close", listener.Close)
-	d.Set("redirect_https", listener.RedirectHTTPS)
-	d.Set("access_is_allow_list", listener.AccessIsAllowList)
-	d.Set("allow_tlsv1", listener.AllowTLSV1)
-	d.Set("allow_tlsv11", listener.AllowTLSV11)
-	d.Set("disable_tlsv12", listener.DisableTLSV12)
-	d.Set("disable_http2", listener.DisableHTTP2)
-	d.Set("http2_only", listener.HTTP2Only)
-	d.Set("custom_ciphers", listener.CustomCiphers)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"name":                    listener.Name,
+		"cluster_id":              listener.ClusterID,
+		"mode":                    listener.Mode,
+		"default_target_group_id": listener.DefaultTargetGroupID,
+		"hsts_enabled":            listener.HSTSEnabled,
+		"hsts_maxage":             listener.HSTSMaxAge,
+		"close":                   listener.Close,
+		"redirect_https":          listener.RedirectHTTPS,
+		"access_is_allow_list":    listener.AccessIsAllowList,
+		"allow_tlsv1":             listener.AllowTLSV1,
+		"allow_tlsv11":            listener.AllowTLSV11,
+		"disable_tlsv12":          listener.DisableTLSV12,
+		"disable_http2":           listener.DisableHTTP2,
+		"http2_only":              listener.HTTP2Only,
+		"custom_ciphers":          listener.CustomCiphers,
+	})
 }
 
-func resourceListenerUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceListenerUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 	patchReq := loadbalancerservice.PatchListenerRequest{}
 
@@ -183,7 +195,7 @@ func resourceListenerUpdate(d *schema.ResourceData, meta interface{}) error {
 	if d.HasChange("mode") {
 		mode, err := loadbalancerservice.ParseMode(d.Get("mode").(string))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
 		patchReq.Mode = mode
@@ -237,24 +249,30 @@ func resourceListenerUpdate(d *schema.ResourceData, meta interface{}) error {
 		patchReq.CustomCiphers = d.Get("custom_ciphers").(string)
 	}
 
-	log.Printf("[INFO] Updating listener with ID [%d]", listenerID)
+	tflog.Info(ctx, "updating listener", map[string]any{
+		"listener_id": listenerID,
+	})
+
 	err := service.PatchListener(listenerID, patchReq)
 	if err != nil {
-		return fmt.Errorf("Error updating listener with ID [%d]: %w", listenerID, err)
+		return diag.Errorf("Error updating listener with ID [%d]: %s", listenerID, err)
 	}
 
-	return resourceListenerRead(d, meta)
+	return resourceListenerRead(ctx, d, meta)
 }
 
-func resourceListenerDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceListenerDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	listenerID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[INFO] Removing listener with ID [%d]", listenerID)
+	tflog.Info(ctx, "removing listener", map[string]any{
+		"listener_id": listenerID,
+	})
+
 	err := service.DeleteListener(listenerID)
 	if err != nil {
-		return fmt.Errorf("Error removing listener with ID [%d]: %s", listenerID, err)
+		return diag.Errorf("Error removing listener with ID [%d]: %s", listenerID, err)
 	}
 
 	return nil

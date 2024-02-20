@@ -1,18 +1,18 @@
 package loadbalancer
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/connection"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceCertificate() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceCertificateRead,
+		ReadContext: dataSourceCertificateRead,
 
 		Schema: map[string]*schema.Schema{
 			"listener_id": {
@@ -31,7 +31,7 @@ func dataSourceCertificate() *schema.Resource {
 	}
 }
 
-func dataSourceCertificateRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceCertificateRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	params := connection.APIRequestParameters{}
@@ -47,22 +47,22 @@ func dataSourceCertificateRead(d *schema.ResourceData, meta interface{}) error {
 
 	certificates, err := service.GetListenerCertificates(listenerID.(int), params)
 	if err != nil {
-		return fmt.Errorf("Error retrieving certificates: %s", err)
+		return diag.Errorf("Error retrieving certificates: %s", err)
 	}
 
 	if len(certificates) < 1 {
-		return errors.New("No certificates found with provided arguments")
+		return diag.Errorf("No certificates found with provided arguments")
 	}
 
 	if len(certificates) > 1 {
-		return errors.New("More than 1 certificate found with provided arguments")
+		return diag.Errorf("More than 1 certificate found with provided arguments")
 	}
 
 	certificate := certificates[0]
 
 	d.SetId(strconv.Itoa(certificate.ID))
-	d.Set("listener_id", certificate.ListenerID)
-	d.Set("name", certificate.Name)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"listener_id": certificate.ListenerID,
+		"name":        certificate.Name,
+	})
 }

@@ -1,35 +1,37 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"errors"
 	"strconv"
 	"strings"
 
 	"github.com/ans-group/sdk-go/pkg/connection"
 	"github.com/ans-group/sdk-go/pkg/ptr"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceTarget() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceTargetCreate,
-		Read:   resourceTargetRead,
-		Update: resourceTargetUpdate,
-		Delete: resourceTargetDelete,
+		CreateContext: resourceTargetCreate,
+		ReadContext:   resourceTargetRead,
+		UpdateContext: resourceTargetUpdate,
+		DeleteContext: resourceTargetDelete,
 		Importer: &schema.ResourceImporter{
-			State: func(d *schema.ResourceData, i interface{}) ([]*schema.ResourceData, error) {
+			StateContext: func(ctx context.Context, d *schema.ResourceData, i interface{}) ([]*schema.ResourceData, error) {
 				ids := strings.Split(d.Id(), "/")
 				targetGroupId, err := strconv.Atoi(ids[0])
 				if err != nil {
 					return nil, err
 				}
 
-				d.Set("target_group_id", targetGroupId)
 				d.SetId(ids[1])
+				err = d.Set("target_group_id", targetGroupId)
 
-				return []*schema.ResourceData{d}, nil
+				return []*schema.ResourceData{d}, err
 			},
 		},
 
@@ -100,8 +102,17 @@ func resourceTarget() *schema.Resource {
 	}
 }
 
-func resourceTargetCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceTargetCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
+
+	targetGroupID := d.Get("target_group_id").(int)
+
+	tflog.Info(ctx, "creating target", map[string]any{
+		"target_group_id": targetGroupID,
+		"name":            d.Get("name"),
+		"ip":              d.Get("ip"),
+		"port":            d.Get("port"),
+	})
 
 	createReq := loadbalancerservice.CreateTargetRequest{
 		Name:          d.Get("name").(string),
@@ -117,57 +128,62 @@ func resourceTargetCreate(d *schema.ResourceData, meta interface{}) error {
 		HTTP2Only:     d.Get("http2_only").(bool),
 		Active:        d.Get("active").(bool),
 	}
-	log.Printf("[DEBUG] Created CreateTargetRequest: %+v", createReq)
 
-	targetGroupID := d.Get("target_group_id").(int)
+	tflog.Debug(ctx, "created CreateTargetRequest", map[string]any{
+		"request": createReq,
+	})
 
-	log.Print("[INFO] Creating target")
 	target, err := service.CreateTargetGroupTarget(targetGroupID, createReq)
 	if err != nil {
-		return fmt.Errorf("Error creating target: %s", err)
+		return diag.Errorf("Error creating target: %s", err)
 	}
 
 	d.SetId(strconv.Itoa(target))
 
-	return resourceTargetRead(d, meta)
+	return resourceTargetRead(ctx, d, meta)
 }
 
-func resourceTargetRead(d *schema.ResourceData, meta interface{}) error {
+func resourceTargetRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	targetID, _ := strconv.Atoi(d.Id())
 	targetGroupID := d.Get("target_group_id").(int)
 
-	log.Printf("[DEBUG] Retrieving Target with ID [%d]", targetID)
+	tflog.Debug(ctx, "retrieving target", map[string]any{
+		"target_id":       targetID,
+		"target_group_id": targetGroupID,
+	})
+
 	target, err := service.GetTargetGroupTarget(targetGroupID, targetID)
 	if err != nil {
-		switch err.(type) {
-		case *loadbalancerservice.TargetNotFoundError:
+		var targetNotFoundError *loadbalancerservice.TargetNotFoundError
+		switch {
+		case errors.As(err, &targetNotFoundError):
 			d.SetId("")
 			return nil
 		default:
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
-	d.Set("name", target.Name)
-	d.Set("target_group_id", target.TargetGroupID)
-	d.Set("ip", target.IP)
-	d.Set("port", target.Port)
-	d.Set("weight", target.Weight)
-	d.Set("backup", target.Backup)
-	d.Set("check_interval", target.CheckInterval)
-	d.Set("check_ssl", target.CheckSSL)
-	d.Set("check_rise", target.CheckRise)
-	d.Set("check_fall", target.CheckFall)
-	d.Set("disable_http2", target.DisableHTTP2)
-	d.Set("http2_only", target.HTTP2Only)
-	d.Set("active", target.Active)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"name":            target.Name,
+		"target_group_id": target.TargetGroupID,
+		"ip":              target.IP,
+		"port":            target.Port,
+		"weight":          target.Weight,
+		"backup":          target.Backup,
+		"check_interval":  target.CheckInterval,
+		"check_ssl":       target.CheckSSL,
+		"check_rise":      target.CheckRise,
+		"check_fall":      target.CheckFall,
+		"disable_http2":   target.DisableHTTP2,
+		"http2_only":      target.HTTP2Only,
+		"active":          target.Active,
+	})
 }
 
-func resourceTargetUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceTargetUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 	patchReq := loadbalancerservice.PatchTargetRequest{}
 
@@ -222,25 +238,33 @@ func resourceTargetUpdate(d *schema.ResourceData, meta interface{}) error {
 		patchReq.Active = ptr.Bool(d.Get("active").(bool))
 	}
 
-	log.Printf("[INFO] Updating target with ID [%d]", targetID)
+	tflog.Info(ctx, "updating target", map[string]any{
+		"target_id":       targetID,
+		"target_group_id": targetGroupID,
+	})
+
 	err := service.PatchTargetGroupTarget(targetGroupID, targetID, patchReq)
 	if err != nil {
-		return fmt.Errorf("Error updating target with ID [%d]: %w", targetID, err)
+		return diag.Errorf("Error updating target with ID [%d]: %s", targetID, err)
 	}
 
-	return resourceTargetRead(d, meta)
+	return resourceTargetRead(ctx, d, meta)
 }
 
-func resourceTargetDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceTargetDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	targetID, _ := strconv.Atoi(d.Id())
 	targetGroupID := d.Get("target_group_id").(int)
 
-	log.Printf("[INFO] Removing target with ID [%d]", targetID)
+	tflog.Info(ctx, "removing target", map[string]any{
+		"target_id":       targetID,
+		"target_group_id": targetGroupID,
+	})
+
 	err := service.DeleteTargetGroupTarget(targetGroupID, targetID)
 	if err != nil {
-		return fmt.Errorf("Error removing target with ID [%d]: %s", targetID, err)
+		return diag.Errorf("Error removing target with ID [%d]: %s", targetID, err)
 	}
 
 	return nil

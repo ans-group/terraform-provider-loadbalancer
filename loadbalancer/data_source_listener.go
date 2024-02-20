@@ -1,18 +1,18 @@
 package loadbalancer
 
 import (
-	"errors"
-	"fmt"
+	"context"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/connection"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func dataSourceListener() *schema.Resource {
 	return &schema.Resource{
-		Read: dataSourceListenerRead,
+		ReadContext: dataSourceListenerRead,
 
 		Schema: map[string]*schema.Schema{
 			"listener_id": {
@@ -79,7 +79,7 @@ func dataSourceListener() *schema.Resource {
 	}
 }
 
-func dataSourceListenerRead(d *schema.ResourceData, meta interface{}) error {
+func dataSourceListenerRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	params := connection.APIRequestParameters{}
@@ -96,31 +96,32 @@ func dataSourceListenerRead(d *schema.ResourceData, meta interface{}) error {
 
 	listeners, err := service.GetListeners(params)
 	if err != nil {
-		return fmt.Errorf("Error retrieving listeners: %s", err)
+		return diag.Errorf("Error retrieving listeners: %s", err)
 	}
 
 	if len(listeners) < 1 {
-		return errors.New("No listeners found with provided arguments")
+		return diag.Errorf("No listeners found with provided arguments")
 	}
 
 	if len(listeners) > 1 {
-		return errors.New("More than 1 listener found with provided arguments")
+		return diag.Errorf("More than 1 listener found with provided arguments")
 	}
 
 	d.SetId(strconv.Itoa(listeners[0].ID))
-	d.Set("name", listeners[0].Name)
-	d.Set("cluster_id", listeners[0].ClusterID)
-	d.Set("hsts_enabled", listeners[0].HSTSEnabled)
-	d.Set("mode", listeners[0].Mode)
-	d.Set("hsts_maxage", listeners[0].HSTSMaxAge)
-	d.Set("close", listeners[0].Close)
-	d.Set("redirect_https", listeners[0].RedirectHTTPS)
-	d.Set("default_target_group_id", listeners[0].DefaultTargetGroupID)
-	d.Set("allow_tlsv1", listeners[0].AllowTLSV1)
-	d.Set("allow_tlsv11", listeners[0].AllowTLSV11)
-	d.Set("disable_tlsv12", listeners[0].DisableTLSV12)
-	d.Set("disable_http2", listeners[0].DisableHTTP2)
-	d.Set("http2_only", listeners[0].HTTP2Only)
 
-	return nil
+	return setKeys(d, map[string]any{
+		"name":                    listeners[0].Name,
+		"cluster_id":              listeners[0].ClusterID,
+		"hsts_enabled":            listeners[0].HSTSEnabled,
+		"mode":                    listeners[0].Mode,
+		"hsts_maxage":             listeners[0].HSTSMaxAge,
+		"close":                   listeners[0].Close,
+		"redirect_https":          listeners[0].RedirectHTTPS,
+		"default_target_group_id": listeners[0].DefaultTargetGroupID,
+		"allow_tlsv1":             listeners[0].AllowTLSV1,
+		"allow_tlsv11":            listeners[0].AllowTLSV11,
+		"disable_tlsv12":          listeners[0].DisableTLSV12,
+		"disable_http2":           listeners[0].DisableHTTP2,
+		"http2_only":              listeners[0].HTTP2Only,
+	})
 }

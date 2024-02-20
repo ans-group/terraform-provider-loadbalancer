@@ -1,22 +1,24 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"errors"
 	"strconv"
 
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceCluster() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceClusterCreate,
-		Read:   resourceClusterRead,
-		Update: resourceClusterUpdate,
-		Delete: resourceClusterDelete,
+		CreateContext: resourceClusterCreate,
+		ReadContext:   resourceClusterRead,
+		UpdateContext: resourceClusterUpdate,
+		DeleteContext: resourceClusterDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -28,33 +30,37 @@ func resourceCluster() *schema.Resource {
 	}
 }
 
-func resourceClusterCreate(d *schema.ResourceData, meta interface{}) error {
-	return fmt.Errorf("The loadbalancer_cluster resource can only be imported at this time")
+func resourceClusterCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
+	return diag.Errorf("The loadbalancer_cluster resource can only be imported at this time")
 }
 
-func resourceClusterRead(d *schema.ResourceData, meta interface{}) error {
+func resourceClusterRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	clusterID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[DEBUG] Retrieving Cluster with ID [%d]", clusterID)
+	tflog.Debug(ctx, "retrieving cluster", map[string]any{
+		"cluster_id": clusterID,
+	})
+
 	cluster, err := service.GetCluster(clusterID)
 	if err != nil {
-		switch err.(type) {
-		case *loadbalancerservice.ClusterNotFoundError:
+		var clusterNotFoundError *loadbalancerservice.ClusterNotFoundError
+		switch {
+		case errors.As(err, &clusterNotFoundError):
 			d.SetId("")
 			return nil
 		default:
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
-	d.Set("name", cluster.Name)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"name": cluster.Name,
+	})
 }
 
-func resourceClusterUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceClusterUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 	patchReq := loadbalancerservice.PatchClusterRequest{}
 
@@ -64,15 +70,18 @@ func resourceClusterUpdate(d *schema.ResourceData, meta interface{}) error {
 		patchReq.Name = d.Get("name").(string)
 	}
 
-	log.Printf("[INFO] Updating cluster with ID [%d]", clusterID)
+	tflog.Info(ctx, "updating cluster", map[string]any{
+		"cluster_id": clusterID,
+	})
+
 	err := service.PatchCluster(clusterID, patchReq)
 	if err != nil {
-		return fmt.Errorf("Error updating cluster with ID [%d]: %w", clusterID, err)
+		return diag.Errorf("Error updating cluster with ID [%d]: %s", clusterID, err)
 	}
 
-	return resourceClusterRead(d, meta)
+	return resourceClusterRead(ctx, d, meta)
 }
 
-func resourceClusterDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceClusterDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	return nil
 }

@@ -1,22 +1,24 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"errors"
 	"strconv"
 
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceACL() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceACLCreate,
-		Read:   resourceACLRead,
-		Update: resourceACLUpdate,
-		Delete: resourceACLDelete,
+		CreateContext: resourceACLCreate,
+		ReadContext:   resourceACLRead,
+		UpdateContext: resourceACLUpdate,
+		DeleteContext: resourceACLDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -98,8 +100,14 @@ func resourceACL() *schema.Resource {
 	}
 }
 
-func resourceACLCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceACLCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
+
+	tflog.Info(ctx, "creating ACL", map[string]any{
+		"listener_id":     d.Get("listener_id"),
+		"target_group_id": d.Get("target_group_id"),
+		"name":            d.Get("name"),
+	})
 
 	createReq := loadbalancerservice.CreateACLRequest{
 		ListenerID:    d.Get("listener_id").(int),
@@ -108,48 +116,52 @@ func resourceACLCreate(d *schema.ResourceData, meta interface{}) error {
 		Conditions:    expandACLConditions(d.Get("condition").([]interface{})),
 		Actions:       expandACLActions(d.Get("action").([]interface{})),
 	}
-	log.Printf("[DEBUG] Created CreateACLRequest: %+v", createReq)
 
-	//return fmt.Errorf("%+v", createReq)
+	tflog.Debug(ctx, "created CreateACLRequest", map[string]any{
+		"create_acl_request": createReq,
+	})
 
-	log.Print("[INFO] Creating ACL")
 	acl, err := service.CreateACL(createReq)
 	if err != nil {
-		return fmt.Errorf("Error creating ACL: %s", err)
+		return diag.Errorf("Error creating ACL: %s", err)
 	}
 
 	d.SetId(strconv.Itoa(acl))
 
-	return resourceACLRead(d, meta)
+	return resourceACLRead(ctx, d, meta)
 }
 
-func resourceACLRead(d *schema.ResourceData, meta interface{}) error {
+func resourceACLRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	aclID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[DEBUG] Retrieving ACL with ID [%d]", aclID)
+	tflog.Debug(ctx, "retrieving ACL", map[string]any{
+		"acl_id": aclID,
+	})
+
 	acl, err := service.GetACL(aclID)
 	if err != nil {
-		switch err.(type) {
-		case *loadbalancerservice.ACLNotFoundError:
+		var ACLNotFoundError *loadbalancerservice.ACLNotFoundError
+		switch {
+		case errors.As(err, &ACLNotFoundError):
 			d.SetId("")
 			return nil
 		default:
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
-	d.Set("listener_id", acl.ListenerID)
-	d.Set("target_group_id", acl.TargetGroupID)
-	d.Set("name", acl.Name)
-	d.Set("condition", flattenACLConditions(acl.Conditions))
-	d.Set("action", flattenACLActions(acl.Actions))
-
-	return nil
+	return setKeys(d, map[string]any{
+		"listener_id":     acl.ListenerID,
+		"target_group_id": acl.TargetGroupID,
+		"name":            acl.Name,
+		"condition":       flattenACLConditions(acl.Conditions),
+		"action":          flattenACLActions(acl.Actions),
+	})
 }
 
-func resourceACLUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceACLUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 	patchReq := loadbalancerservice.PatchACLRequest{}
 
@@ -167,24 +179,30 @@ func resourceACLUpdate(d *schema.ResourceData, meta interface{}) error {
 		patchReq.Actions = expandACLActions(d.Get("action").([]interface{}))
 	}
 
-	log.Printf("[INFO] Updating ACL with ID [%d]", aclID)
+	tflog.Info(ctx, "updating ACL", map[string]any{
+		"acl_id": aclID,
+	})
+
 	err := service.PatchACL(aclID, patchReq)
 	if err != nil {
-		return fmt.Errorf("Error updating ACL with ID [%d]: %w", aclID, err)
+		return diag.Errorf("Error updating ACL with ID [%d]: %s", aclID, err)
 	}
 
-	return resourceACLRead(d, meta)
+	return resourceACLRead(ctx, d, meta)
 }
 
-func resourceACLDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceACLDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	aclID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[INFO] Removing ACL with ID [%d]", aclID)
+	tflog.Info(ctx, "removing ACL", map[string]any{
+		"acl_id": aclID,
+	})
+
 	err := service.DeleteACL(aclID)
 	if err != nil {
-		return fmt.Errorf("Error removing ACL with ID [%d]: %s", aclID, err)
+		return diag.Errorf("Error removing ACL with ID [%d]: %s", aclID, err)
 	}
 
 	return nil

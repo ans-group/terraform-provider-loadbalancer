@@ -1,23 +1,25 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"errors"
 	"strconv"
 	"strings"
 
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceBind() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceBindCreate,
-		Read:   resourceBindRead,
-		Update: resourceBindUpdate,
-		Delete: resourceBindDelete,
+		CreateContext: resourceBindCreate,
+		ReadContext:   resourceBindRead,
+		UpdateContext: resourceBindUpdate,
+		DeleteContext: resourceBindDelete,
 		Importer: &schema.ResourceImporter{
-			State: func(d *schema.ResourceData, i interface{}) ([]*schema.ResourceData, error) {
+			StateContext: func(ctx context.Context, d *schema.ResourceData, i interface{}) ([]*schema.ResourceData, error) {
 				ids := strings.Split(d.Id(), "/")
 				listenerId, err := strconv.Atoi(ids[0])
 				if err != nil {
@@ -25,9 +27,9 @@ func resourceBind() *schema.Resource {
 				}
 
 				d.SetId(ids[1])
-				d.Set("listener_id", listenerId)
+				err = d.Set("listener_id", listenerId)
 
-				return []*schema.ResourceData{d}, nil
+				return []*schema.ResourceData{d}, err
 			},
 		},
 
@@ -49,54 +51,66 @@ func resourceBind() *schema.Resource {
 	}
 }
 
-func resourceBindCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceBindCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
+
+	listenerID := d.Get("listener_id").(int)
+
+	tflog.Info(ctx, "creating bind", map[string]any{
+		"vip_id":      d.Get("vip_id"),
+		"port":        d.Get("port"),
+		"listener_id": d.Get("listener_id"),
+	})
 
 	createReq := loadbalancerservice.CreateBindRequest{
 		VIPID: d.Get("vip_id").(int),
 		Port:  d.Get("port").(int),
 	}
-	log.Printf("[DEBUG] Created CreateBindRequest: %+v", createReq)
+	tflog.Debug(ctx, "created CreateBindRequest", map[string]any{
+		"create_bind_request": createReq,
+	})
 
-	listenerID := d.Get("listener_id").(int)
-
-	log.Print("[INFO] Creating bind")
 	bind, err := service.CreateListenerBind(listenerID, createReq)
 	if err != nil {
-		return fmt.Errorf("Error creating bind: %s", err)
+		return diag.Errorf("Error creating bind: %s", err)
 	}
 
 	d.SetId(strconv.Itoa(bind))
 
-	return resourceBindRead(d, meta)
+	return resourceBindRead(ctx, d, meta)
 }
 
-func resourceBindRead(d *schema.ResourceData, meta interface{}) error {
+func resourceBindRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	bindID, _ := strconv.Atoi(d.Id())
 	listenerID := d.Get("listener_id").(int)
 
-	log.Printf("[DEBUG] Retrieving Bind with ID [%d]", bindID)
+	tflog.Debug(ctx, "retrieving bind", map[string]any{
+		"bind_id":     bindID,
+		"listener_id": listenerID,
+	})
+
 	bind, err := service.GetListenerBind(listenerID, bindID)
 	if err != nil {
-		switch err.(type) {
-		case *loadbalancerservice.BindNotFoundError:
+		var bindNotFoundError *loadbalancerservice.BindNotFoundError
+		switch {
+		case errors.As(err, &bindNotFoundError):
 			d.SetId("")
 			return nil
 		default:
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
-	d.Set("listener_id", bind.ListenerID)
-	d.Set("vip_id", bind.VIPID)
-	d.Set("port", bind.Port)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"listener_id": bind.ListenerID,
+		"vip_id":      bind.VIPID,
+		"port":        bind.Port,
+	})
 }
 
-func resourceBindUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceBindUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 	patchReq := loadbalancerservice.PatchBindRequest{}
 
@@ -111,25 +125,33 @@ func resourceBindUpdate(d *schema.ResourceData, meta interface{}) error {
 		patchReq.Port = d.Get("port").(int)
 	}
 
-	log.Printf("[INFO] Updating bind with ID [%d]", bindID)
+	tflog.Info(ctx, "updating bind", map[string]any{
+		"bind_id":     bindID,
+		"listener_id": listenerID,
+	})
+
 	err := service.PatchListenerBind(listenerID, bindID, patchReq)
 	if err != nil {
-		return fmt.Errorf("Error updating bind with ID [%d]: %w", bindID, err)
+		return diag.Errorf("Error updating bind with ID [%d]: %s", bindID, err)
 	}
 
-	return resourceBindRead(d, meta)
+	return resourceBindRead(ctx, d, meta)
 }
 
-func resourceBindDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceBindDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	bindID, _ := strconv.Atoi(d.Id())
 	listenerID := d.Get("listener_id").(int)
 
-	log.Printf("[INFO] Removing bind with ID [%d]", bindID)
+	tflog.Info(ctx, "removing bind", map[string]any{
+		"bind_id":     bindID,
+		"listener_id": listenerID,
+	})
+
 	err := service.DeleteListenerBind(listenerID, bindID)
 	if err != nil {
-		return fmt.Errorf("Error removing bind with ID [%d]: %s", bindID, err)
+		return diag.Errorf("Error removing bind with ID [%d]: %s", bindID, err)
 	}
 
 	return nil

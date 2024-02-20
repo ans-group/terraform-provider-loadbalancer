@@ -1,22 +1,24 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"errors"
 	"strconv"
 
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceCertificate() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceCertificateCreate,
-		Read:   resourceCertificateRead,
-		Update: resourceCertificateUpdate,
-		Delete: resourceCertificateDelete,
+		CreateContext: resourceCertificateCreate,
+		ReadContext:   resourceCertificateRead,
+		UpdateContext: resourceCertificateUpdate,
+		DeleteContext: resourceCertificateDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -45,8 +47,15 @@ func resourceCertificate() *schema.Resource {
 	}
 }
 
-func resourceCertificateCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceCertificateCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
+
+	listenerID := d.Get("listener_id").(int)
+
+	tflog.Info(ctx, "creating certificate", map[string]any{
+		"name":        d.Get("name"),
+		"listener_id": d.Get("listener_id"),
+	})
 
 	createReq := loadbalancerservice.CreateCertificateRequest{
 		Name:        d.Get("name").(string),
@@ -54,46 +63,51 @@ func resourceCertificateCreate(d *schema.ResourceData, meta interface{}) error {
 		Certificate: d.Get("certificate").(string),
 		CABundle:    d.Get("ca_bundle").(string),
 	}
-	log.Printf("[DEBUG] Created CreateCertificateRequest: %+v", createReq)
 
-	listenerID := d.Get("listener_id").(int)
+	tflog.Debug(ctx, "created CreateCertificateRequest", map[string]any{
+		"request": createReq,
+	})
 
-	log.Print("[INFO] Creating certificate")
 	certificate, err := service.CreateListenerCertificate(listenerID, createReq)
 	if err != nil {
-		return fmt.Errorf("Error creating certificate: %s", err)
+		return diag.Errorf("Error creating certificate: %s", err)
 	}
 
 	d.SetId(strconv.Itoa(certificate))
 
-	return resourceCertificateRead(d, meta)
+	return resourceCertificateRead(ctx, d, meta)
 }
 
-func resourceCertificateRead(d *schema.ResourceData, meta interface{}) error {
+func resourceCertificateRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	certificateID, _ := strconv.Atoi(d.Id())
 	listenerID := d.Get("listener_id").(int)
 
-	log.Printf("[DEBUG] Retrieving Certificate with ID [%d]", certificateID)
+	tflog.Debug(ctx, "retrieving certificate", map[string]any{
+		"certificate_id": certificateID,
+		"listener_id":    listenerID,
+	})
+
 	certificate, err := service.GetListenerCertificate(listenerID, certificateID)
 	if err != nil {
-		switch err.(type) {
-		case *loadbalancerservice.CertificateNotFoundError:
+		var certificateNotFoundError *loadbalancerservice.CertificateNotFoundError
+		switch {
+		case errors.As(err, &certificateNotFoundError):
 			d.SetId("")
 			return nil
 		default:
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
-	d.Set("listener_id", certificate.ListenerID)
-	d.Set("name", certificate.Name)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"listener_id": certificate.ListenerID,
+		"name":        certificate.Name,
+	})
 }
 
-func resourceCertificateUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceCertificateUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 	patchReq := loadbalancerservice.PatchCertificateRequest{}
 
@@ -116,25 +130,34 @@ func resourceCertificateUpdate(d *schema.ResourceData, meta interface{}) error {
 		patchReq.CABundle = d.Get("ca_bundle").(string)
 	}
 
-	log.Printf("[INFO] Updating certificate with ID [%d]", certificateID)
+	tflog.Info(ctx, "updating certificate", map[string]any{
+		"certificate_id": certificateID,
+		"listener_id":    listenerID,
+		"name":           d.Get("name"),
+	})
+
 	err := service.PatchListenerCertificate(listenerID, certificateID, patchReq)
 	if err != nil {
-		return fmt.Errorf("Error updating certificate with ID [%d]: %w", certificateID, err)
+		return diag.Errorf("Error updating certificate with ID [%d]: %s", certificateID, err)
 	}
 
-	return resourceCertificateRead(d, meta)
+	return resourceCertificateRead(ctx, d, meta)
 }
 
-func resourceCertificateDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceCertificateDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	certificateID, _ := strconv.Atoi(d.Id())
 	listenerID := d.Get("listener_id").(int)
 
-	log.Printf("[INFO] Removing certificate with ID [%d]", certificateID)
+	tflog.Info(ctx, "removing certificate", map[string]any{
+		"certificate_id": certificateID,
+		"listener_id":    listenerID,
+	})
+
 	err := service.DeleteListenerCertificate(listenerID, certificateID)
 	if err != nil {
-		return fmt.Errorf("Error removing certificate with ID [%d]: %s", certificateID, err)
+		return diag.Errorf("Error removing certificate with ID [%d]: %s", certificateID, err)
 	}
 
 	return nil

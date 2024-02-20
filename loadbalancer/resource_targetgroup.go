@@ -1,23 +1,25 @@
 package loadbalancer
 
 import (
-	"fmt"
-	"log"
+	"context"
+	"errors"
 	"strconv"
 
 	"github.com/ans-group/sdk-go/pkg/ptr"
 	loadbalancerservice "github.com/ans-group/sdk-go/pkg/service/loadbalancer"
+	"github.com/hashicorp/terraform-plugin-log/tflog"
+	"github.com/hashicorp/terraform-plugin-sdk/v2/diag"
 	"github.com/hashicorp/terraform-plugin-sdk/v2/helper/schema"
 )
 
 func resourceTargetGroup() *schema.Resource {
 	return &schema.Resource{
-		Create: resourceTargetGroupCreate,
-		Read:   resourceTargetGroupRead,
-		Update: resourceTargetGroupUpdate,
-		Delete: resourceTargetGroupDelete,
+		CreateContext: resourceTargetGroupCreate,
+		ReadContext:   resourceTargetGroupRead,
+		UpdateContext: resourceTargetGroupUpdate,
+		DeleteContext: resourceTargetGroupDelete,
 		Importer: &schema.ResourceImporter{
-			State: schema.ImportStatePassthrough,
+			StateContext: schema.ImportStatePassthroughContext,
 		},
 
 		Schema: map[string]*schema.Schema{
@@ -137,26 +139,33 @@ func resourceTargetGroup() *schema.Resource {
 	}
 }
 
-func resourceTargetGroupCreate(d *schema.ResourceData, meta interface{}) error {
+func resourceTargetGroupCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	balance, err := loadbalancerservice.ParseTargetGroupBalance(d.Get("balance").(string))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	mode, err := loadbalancerservice.ParseMode(d.Get("mode").(string))
 	if err != nil {
-		return err
+		return diag.FromErr(err)
 	}
 
 	var monitorMethod loadbalancerservice.TargetGroupMonitorMethod
 	if d.HasChange("monitor_method") {
 		monitorMethod, err = loadbalancerservice.ParseTargetGroupMonitorMethod(d.Get("monitor_method").(string))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 	}
+
+	tflog.Info(ctx, "creating target group", map[string]any{
+		"name":       d.Get("name"),
+		"cluster_id": d.Get("cluster_id"),
+		"balance":    d.Get("balance"),
+		"mode":       d.Get("mode"),
+	})
 
 	createReq := loadbalancerservice.CreateTargetGroupRequest{
 		Name:                 d.Get("name").(string),
@@ -183,64 +192,69 @@ func resourceTargetGroupCreate(d *schema.ResourceData, meta interface{}) error {
 		SSLVerify:            d.Get("ssl_verify").(bool),
 		SNI:                  d.Get("sni").(bool),
 	}
-	log.Printf("[DEBUG] Created CreateTargetGroupRequest: %+v", createReq)
+	tflog.Debug(ctx, "created CreateTargetGroupRequest", map[string]any{
+		"request": createReq,
+	})
 
-	log.Print("[INFO] Creating target group")
 	group, err := service.CreateTargetGroup(createReq)
 	if err != nil {
-		return fmt.Errorf("Error creating target group: %s", err)
+		return diag.Errorf("Error creating target group: %s", err)
 	}
 
 	d.SetId(strconv.Itoa(group))
 
-	return resourceTargetGroupRead(d, meta)
+	return resourceTargetGroupRead(ctx, d, meta)
 }
 
-func resourceTargetGroupRead(d *schema.ResourceData, meta interface{}) error {
+func resourceTargetGroupRead(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	groupID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[DEBUG] Retrieving TargetGroup with ID [%d]", groupID)
+	tflog.Debug(ctx, "retrieving target group", map[string]any{
+		"target_group_id": groupID,
+	})
+
 	group, err := service.GetTargetGroup(groupID)
 	if err != nil {
-		switch err.(type) {
-		case *loadbalancerservice.TargetGroupNotFoundError:
+		var targetGroupNotFoundError *loadbalancerservice.TargetGroupNotFoundError
+		switch {
+		case errors.As(err, &targetGroupNotFoundError):
 			d.SetId("")
 			return nil
 		default:
-			return err
+			return diag.FromErr(err)
 		}
 	}
 
-	d.Set("name", group.Name)
-	d.Set("cluster_id", group.ClusterID)
-	d.Set("balance", group.Balance)
-	d.Set("mode", group.Mode)
-	d.Set("close", group.Close)
-	d.Set("sticky", group.Sticky)
-	d.Set("cookie_opts", group.CookieOpts)
-	d.Set("source", group.Source)
-	d.Set("timeouts_connect", group.TimeoutsConnect)
-	d.Set("timeouts_server", group.TimeoutsServer)
-	d.Set("custom_options", group.CustomOptions)
-	d.Set("monitor_url", group.MonitorURL)
-	d.Set("monitor_method", group.MonitorMethod)
-	d.Set("monitor_host", group.MonitorHost)
-	d.Set("monitor_http_version", group.MonitorHTTPVersion)
-	d.Set("monitor_expect", group.MonitorExpect)
-	d.Set("monitor_tcp_monitoring", group.MonitorTCPMonitoring)
-	d.Set("check_port", group.CheckPort)
-	d.Set("send_proxy", group.SendProxy)
-	d.Set("send_proxy_v2", group.SendProxyV2)
-	d.Set("ssl", group.SSL)
-	d.Set("ssl_verify", group.SSLVerify)
-	d.Set("sni", group.SNI)
-
-	return nil
+	return setKeys(d, map[string]any{
+		"name":                   group.Name,
+		"cluster_id":             group.ClusterID,
+		"balance":                group.Balance,
+		"mode":                   group.Mode,
+		"close":                  group.Close,
+		"sticky":                 group.Sticky,
+		"cookie_opts":            group.CookieOpts,
+		"source":                 group.Source,
+		"timeouts_connect":       group.TimeoutsConnect,
+		"timeouts_server":        group.TimeoutsServer,
+		"custom_options":         group.CustomOptions,
+		"monitor_url":            group.MonitorURL,
+		"monitor_method":         group.MonitorMethod,
+		"monitor_host":           group.MonitorHost,
+		"monitor_http_version":   group.MonitorHTTPVersion,
+		"monitor_expect":         group.MonitorExpect,
+		"monitor_tcp_monitoring": group.MonitorTCPMonitoring,
+		"check_port":             group.CheckPort,
+		"send_proxy":             group.SendProxy,
+		"send_proxy_v2":          group.SendProxyV2,
+		"ssl":                    group.SSL,
+		"ssl_verify":             group.SSLVerify,
+		"sni":                    group.SNI,
+	})
 }
 
-func resourceTargetGroupUpdate(d *schema.ResourceData, meta interface{}) error {
+func resourceTargetGroupUpdate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 	patchReq := loadbalancerservice.PatchTargetGroupRequest{}
 
@@ -253,7 +267,7 @@ func resourceTargetGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 	if d.HasChange("balance") {
 		balance, err := loadbalancerservice.ParseTargetGroupBalance(d.Get("balance").(string))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
 		patchReq.Balance = balance
@@ -262,7 +276,7 @@ func resourceTargetGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 	if d.HasChange("mode") {
 		mode, err := loadbalancerservice.ParseMode(d.Get("mode").(string))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
 		patchReq.Mode = mode
@@ -303,7 +317,7 @@ func resourceTargetGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 	if d.HasChange("monitor_method") {
 		monitorMethod, err := loadbalancerservice.ParseTargetGroupMonitorMethod(d.Get("monitor_method").(string))
 		if err != nil {
-			return err
+			return diag.FromErr(err)
 		}
 
 		patchReq.MonitorMethod = monitorMethod
@@ -349,24 +363,30 @@ func resourceTargetGroupUpdate(d *schema.ResourceData, meta interface{}) error {
 		patchReq.SNI = ptr.Bool(d.Get("sni").(bool))
 	}
 
-	log.Printf("[INFO] Updating target group with ID [%d]", groupID)
+	tflog.Info(ctx, "updating target group", map[string]any{
+		"target_group_id": groupID,
+	})
+
 	err := service.PatchTargetGroup(groupID, patchReq)
 	if err != nil {
-		return fmt.Errorf("Error updating target group with ID [%d]: %w", groupID, err)
+		return diag.Errorf("Error updating target group with ID [%d]: %s", groupID, err)
 	}
 
-	return resourceTargetGroupRead(d, meta)
+	return resourceTargetGroupRead(ctx, d, meta)
 }
 
-func resourceTargetGroupDelete(d *schema.ResourceData, meta interface{}) error {
+func resourceTargetGroupDelete(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
 	groupID, _ := strconv.Atoi(d.Id())
 
-	log.Printf("[INFO] Removing target group with ID [%d]", groupID)
+	tflog.Info(ctx, "removing target group", map[string]any{
+		"target_group_id": groupID,
+	})
+
 	err := service.DeleteTargetGroup(groupID)
 	if err != nil {
-		return fmt.Errorf("Error removing target group with ID [%d]: %s", groupID, err)
+		return diag.Errorf("Error removing target group with ID [%d]: %s", groupID, err)
 	}
 
 	return nil
