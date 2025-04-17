@@ -102,7 +102,7 @@ func resourceListener() *schema.Resource {
 func resourceListenerCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
-	mode, err := loadbalancerservice.ParseMode(d.Get("mode").(string))
+	mode, err := loadbalancerservice.ModeEnum.Parse(d.Get("mode").(string))
 	if err != nil {
 		return diag.FromErr(err)
 	}
@@ -193,7 +193,7 @@ func resourceListenerUpdate(ctx context.Context, d *schema.ResourceData, meta in
 	}
 
 	if d.HasChange("mode") {
-		mode, err := loadbalancerservice.ParseMode(d.Get("mode").(string))
+		mode, err := loadbalancerservice.ModeEnum.Parse(d.Get("mode").(string))
 		if err != nil {
 			return diag.FromErr(err)
 		}
