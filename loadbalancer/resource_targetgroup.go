@@ -142,19 +142,19 @@ func resourceTargetGroup() *schema.Resource {
 func resourceTargetGroupCreate(ctx context.Context, d *schema.ResourceData, meta interface{}) diag.Diagnostics {
 	service := meta.(loadbalancerservice.LoadBalancerService)
 
-	balance, err := loadbalancerservice.ParseTargetGroupBalance(d.Get("balance").(string))
+	balance, err := loadbalancerservice.TargetGroupBalanceEnum.Parse(d.Get("balance").(string))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
-	mode, err := loadbalancerservice.ParseMode(d.Get("mode").(string))
+	mode, err := loadbalancerservice.ModeEnum.Parse(d.Get("mode").(string))
 	if err != nil {
 		return diag.FromErr(err)
 	}
 
 	var monitorMethod loadbalancerservice.TargetGroupMonitorMethod
 	if d.HasChange("monitor_method") {
-		monitorMethod, err = loadbalancerservice.ParseTargetGroupMonitorMethod(d.Get("monitor_method").(string))
+		monitorMethod, err = loadbalancerservice.TargetGroupMonitorMethodEnum.Parse(d.Get("monitor_method").(string))
 		if err != nil {
 			return diag.FromErr(err)
 		}
@@ -265,7 +265,7 @@ func resourceTargetGroupUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if d.HasChange("balance") {
-		balance, err := loadbalancerservice.ParseTargetGroupBalance(d.Get("balance").(string))
+		balance, err := loadbalancerservice.TargetGroupBalanceEnum.Parse(d.Get("balance").(string))
 		if err != nil {
 			return diag.FromErr(err)
 		}
@@ -274,7 +274,7 @@ func resourceTargetGroupUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if d.HasChange("mode") {
-		mode, err := loadbalancerservice.ParseMode(d.Get("mode").(string))
+		mode, err := loadbalancerservice.ModeEnum.Parse(d.Get("mode").(string))
 		if err != nil {
 			return diag.FromErr(err)
 		}
@@ -315,7 +315,7 @@ func resourceTargetGroupUpdate(ctx context.Context, d *schema.ResourceData, meta
 	}
 
 	if d.HasChange("monitor_method") {
-		monitorMethod, err := loadbalancerservice.ParseTargetGroupMonitorMethod(d.Get("monitor_method").(string))
+		monitorMethod, err := loadbalancerservice.TargetGroupMonitorMethodEnum.Parse(d.Get("monitor_method").(string))
 		if err != nil {
 			return diag.FromErr(err)
 		}
